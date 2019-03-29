@@ -4,10 +4,10 @@
     {
         Unknown = -1,
         EndOfFile,
-        CurlyBracketLeft,
+        OpenObjectCurlyBracket,
         Whitespace,
         DoubleQuote,
-        CurlyBracketRight,
+        CloseObjectCurlyBracket,
         Letter,
         Digit,
         Colon,
@@ -21,6 +21,8 @@
         SimpleQuote,
         Dot,
         Plus,
+        Literal,
+        PropertyName,
         Count
     }
 }

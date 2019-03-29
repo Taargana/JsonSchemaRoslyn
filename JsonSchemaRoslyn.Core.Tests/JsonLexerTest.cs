@@ -34,13 +34,20 @@ namespace JsonSchemaRoslyn.Core.Tests
             Stopwatch watch = new Stopwatch();
             watch.Start();
             //using (JsonLexer jsonLexer = new JsonLexer(new FileInfo("./TestJsonFiles/JsonUtf8WithBom.json")))
-            using (JsonLexer jsonLexer = new JsonLexer(new FileInfo(@"C:\Program Files (x86)\Audiokinetic\Wwise 2017.2.9.6726\Authoring\Data\Schemas\WwiseAuthoringAPI.json")))
+            using (JsonLexer jsonLexer = new JsonLexer(new FileInfo(@"C:\Program Files (x86)\Audiokinetic\Wwise 2017.2.0.6500\Authoring\Data\Schemas\WwiseAuthoringAPI.json")))
             {
-                SyntaxToken token;
-                do
+                /*foreach (SyntaxToken syntaxToken in jsonLexer.Lex())
                 {
-                    tokens.Add(jsonLexer.Lex());
-                } while (tokens.Last().Kind != SyntaxKind.EndOfFile);
+                    tokens.Add(syntaxToken);
+
+                    if (syntaxToken.Kind != SyntaxKind.Whitespace)
+                    {
+                        Debug.WriteLine(syntaxToken.Text);
+                    }
+                }*/
+
+                tokens = jsonLexer.Lex().AsParallel().AsOrdered().ToList();
+
                 watch.Stop();
                 TimeSpan elapsed = watch.Elapsed;
             }

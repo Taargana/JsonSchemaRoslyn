@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using JetBrains.Annotations;
 
 namespace JsonSchemaRoslyn.Core
 {
     public interface ILexer : IDisposable
     {
-        SyntaxToken Lex();
+        [NotNull] IEnumerable<SyntaxToken> Lex();
     }
 }

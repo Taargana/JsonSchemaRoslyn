@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Text;
 using JetBrains.Annotations;
@@ -17,7 +20,11 @@ namespace JsonSchemaRoslyn.Core
         [NotNull] private Stream _sourceStream;
         private long _position = 0;
         private EncodingInfos _detectEncodingFromByteOrderMarks;
+        /// <summary>
+        /// true when the previous char was "; false otherwise
+        /// </summary>
         [NotNull] private readonly ReadCharBag _readCharBag;
+        private char _currentChar;
 
         [NotNull]
         public DiagnosticBag Diagnostics { get; }
@@ -78,147 +85,175 @@ namespace JsonSchemaRoslyn.Core
         }
 
         /// <inheritdoc />
-        public SyntaxToken Lex()
+        public IEnumerable<SyntaxToken> Lex()
         {
             object value = null;
             SyntaxKind kind = SyntaxKind.Unknown;
             string text = String.Empty;
             long startPosition = _position;
 
-            using (_readCharBag)
+            do
             {
-                int readByte = _sourceStream.ReadByte();
-                if (readByte == -1)
+                using (_readCharBag)
                 {
-                    kind = SyntaxKind.EndOfFile;
-                }
-                else
-                {
-                    char currentChar = (char) readByte;
-                    _readCharBag.Add(currentChar);
-                    switch (currentChar)
+                    int readByte = _sourceStream.ReadByte();
+                    if (readByte == -1)
                     {
-                        case '\0':
-                            kind = SyntaxKind.EndOfFile;
-                            break;
-                        case '{':
-                            kind = SyntaxKind.CurlyBracketLeft;
-                            break;
-                        case '}':
-                            kind = SyntaxKind.CurlyBracketRight;
-                            break;
-                        case '"':
-                            kind = SyntaxKind.DoubleQuote;
-                            break;
-                        case '\'':
-                            kind = SyntaxKind.SimpleQuote;
-                            break;
-                        case '-':
-                            kind = SyntaxKind.Minus;
-                            break;
-                        case ',':
-                            kind = SyntaxKind.Coma;
-                            break;
-                        case ';':
-                            kind = SyntaxKind.SemiColon;
-                            break;
-                        case '=':
-                            kind = SyntaxKind.Equal;
-                            break;
-                        case '/':
-                            kind = SyntaxKind.Slash;
-                            break;
-                        case '\\':
-                            kind = SyntaxKind.BackSlash;
-                            break;
-                        case '*':
-                            kind = SyntaxKind.Star;
-                            break;
-                        case ':':
-                            kind = SyntaxKind.Colon;
-                            break;
-                        case '.':
-                            kind = SyntaxKind.Dot;
-                            break;
-                        case '+':
-                            kind = SyntaxKind.Plus;
-                            break;
-                        case ' ':
-                        case '\t':
-                        case '\n':
-                        case '\r':
-                            ExtractWhisteSpace();
-                            kind = SyntaxKind.Whitespace;
-                            break;
-                        default:
-                            if (char.IsLetter(currentChar))
-                            {
-                                ExtractLiteral();
-                                kind = SyntaxKind.Letter;
-                            }
-                            else if (char.IsDigit(currentChar))
-                            {
-                                ExtractDigit();
-                                value = BigInteger.Parse(_readCharBag.ToString());
-                                kind = SyntaxKind.Digit;
-                            }
-                            break;
+                        kind = SyntaxKind.EndOfFile;
                     }
+                    else
+                    {
+                        _currentChar = (char)readByte;
+                        _readCharBag.Add(_currentChar);
 
-                    text = _readCharBag.ToString();
-                    if (kind == SyntaxKind.Unknown || kind == SyntaxKind.Count)
-                    {
-                        Diagnostics.AddDiagnostic(new Diagnostic(new TextSpan(startPosition, text?.Length ?? 0),
-                            $"Unknown character(s) {text}"));
+                        switch (_currentChar)
+                        {
+                            case '\0':
+                                kind = SyntaxKind.EndOfFile;
+                                break;
+                            case '{':
+                                kind = SyntaxKind.OpenObjectCurlyBracket;
+                                break;
+                            case '}':
+                                kind = SyntaxKind.CloseObjectCurlyBracket;
+                                break;
+                            case '"':
+                                yield return new SyntaxToken(SyntaxKind.DoubleQuote, "\"", startPosition);
+                                using (ReadCharBag literalCharBag = ReadCharBag.FromCharBag(_readCharBag))
+                                {
+                                    string literal = ExtractLiteral(literalCharBag);
+                                    yield return new SyntaxToken(SyntaxKind.Literal, literal, startPosition);
+                                }
+
+                                kind = SyntaxKind.DoubleQuote;
+                                break;
+                            case '\'':
+                                kind = SyntaxKind.SimpleQuote;
+                                break;
+                            case '-':
+                                kind = SyntaxKind.Minus;
+                                break;
+                            case ',':
+                                kind = SyntaxKind.Coma;
+                                break;
+                            case ';':
+                                kind = SyntaxKind.SemiColon;
+                                break;
+                            case '=':
+                                kind = SyntaxKind.Equal;
+                                break;
+                            case '/':
+                                kind = SyntaxKind.Slash;
+                                break;
+                            case '\\':
+                                kind = SyntaxKind.BackSlash;
+                                break;
+                            case '*':
+                                kind = SyntaxKind.Star;
+                                break;
+                            case ':':
+                                kind = SyntaxKind.Colon;
+                                break;
+                            case '.':
+                                kind = SyntaxKind.Dot;
+                                break;
+                            case '+':
+                                kind = SyntaxKind.Plus;
+                                break;
+                            case ' ':
+                            case '\t':
+                            case '\n':
+                            case '\r':
+                                ExtractWhisteSpace();
+                                kind = SyntaxKind.Whitespace;
+                                break;
+                            default:
+                                if (char.IsLetter(_currentChar))
+                                {
+                                    ExtractLiteral();
+                                    kind = SyntaxKind.PropertyName;
+                                }
+                                else if (char.IsDigit(_currentChar))
+                                {
+                                    ExtractDigit();
+                                    value = BigInteger.Parse(_readCharBag.ToString());
+                                    kind = SyntaxKind.Digit;
+                                }
+                                else
+                                {
+                                    kind = SyntaxKind.Unknown;
+                                }
+
+                                break;
+                        }
+
+                        text = _readCharBag.ToString();
+                        if (kind == SyntaxKind.Unknown || kind == SyntaxKind.Count)
+                        {
+                            Diagnostics.AddDiagnostic(new Diagnostic(new TextSpan(startPosition, text?.Length ?? 0),
+                                $"Unknown character(s) {text}"));
+                        }
                     }
                 }
-            }
-            return new SyntaxToken(kind, text, startPosition, value);
+
+                yield return new SyntaxToken(kind, text, startPosition, value);
+            } while (kind != SyntaxKind.EndOfFile);
         }
 
         private void ExtractWhisteSpace()
         {
-            char tmpWhiteSpace;
             do
             {
-                tmpWhiteSpace = (char) _sourceStream.ReadByte();
-
-                if (char.IsWhiteSpace(tmpWhiteSpace))
+                _currentChar = (char)_sourceStream.ReadByte();
+                if (char.IsWhiteSpace(_currentChar))
                 {
-                    _readCharBag.Add(tmpWhiteSpace);
+                    _readCharBag.Add(_currentChar);
                 }
-            } while (char.IsWhiteSpace(tmpWhiteSpace));
-            _sourceStream.Position = _sourceStream.Position - 1;
+            } while (char.IsWhiteSpace(_currentChar));
         }
 
-        private void ExtractLiteral()
+        private IEnumerable<char> ReadChars()
         {
-            char tmpLetter;
-            do
+            int byteValue;
+            while (true)
             {
-                tmpLetter = (char) _sourceStream.ReadByte();
-
-                if (char.IsLetter(tmpLetter))
+                byteValue = _sourceStream.ReadByte();
+                yield return (char)byteValue;
+                if (byteValue == -1)
                 {
-                    _readCharBag.Add(tmpLetter);
+                    break;
                 }
-            } while (char.IsLetter(tmpLetter));
-            _sourceStream.Position = _sourceStream.Position - 1;
+            }
+        }
+
+        private string ExtractLiteral(ReadCharBag charBag = null)
+        {
+            var currentBag = charBag ?? _readCharBag;
+            char previousChar = default(char);
+            while (true)
+            {
+                _currentChar = (char)_sourceStream.ReadByte();
+                if (_currentChar == '"' && previousChar != '\\')
+                {
+                    break;
+                }
+                currentBag.Add(_currentChar);
+                previousChar = _currentChar;
+            } 
+
+            return new String(currentBag);
         }
 
         private void ExtractDigit()
         {
-            char tmpLetter;
             do
             {
-                tmpLetter = (char) _sourceStream.ReadByte();
-
-                if (char.IsDigit(tmpLetter))
+                _currentChar = (char)_sourceStream.ReadByte();
+                if (char.IsDigit(_currentChar))
                 {
-                    _readCharBag.Add(tmpLetter);
+                    _readCharBag.Add(_currentChar);
                 }
-            } while (char.IsDigit(tmpLetter));
-            _sourceStream.Position = _sourceStream.Position - 1;
+            } while (char.IsDigit(_currentChar));
         }
 
         /// <inheritdoc />

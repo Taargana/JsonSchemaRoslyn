@@ -16,6 +16,16 @@ namespace JsonSchemaRoslyn.Core
 
         [NotNull] private static readonly object _locker = new object();
 
+        public static ReadCharBag FromCharBag([NotNull]ReadCharBag initialBag)
+        {
+            if (initialBag == null) throw new ArgumentNullException(nameof(initialBag));
+            var result = new ReadCharBag {_readChars = new char[initialBag._readChars.Length]};
+
+            initialBag._readChars.CopyTo(result._readChars, 0);
+
+            return result;
+        }
+
         public void Add(Char @byte)
         {
             lock (_locker)

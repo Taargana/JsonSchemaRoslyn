@@ -23,6 +23,10 @@
         Plus,
         Literal,
         PropertyName,
+        OpenArrayBracket,
+        CloseArrayBracket,
+        Boolean,
+        Null,
         Count
     }
 }

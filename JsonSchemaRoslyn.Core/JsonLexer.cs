@@ -56,7 +56,7 @@ namespace JsonSchemaRoslyn.Core
             }
 
             _sourceStream = new MemoryStream();
-            var writer = new StreamWriter(_sourceStream);
+            StreamWriter writer = new StreamWriter(_sourceStream);
             writer.Write(content);
             writer.Flush();
             _sourceStream.Position = 0;
@@ -91,13 +91,14 @@ namespace JsonSchemaRoslyn.Core
         /// <inheritdoc />
         public IEnumerable<SyntaxToken> Lex()
         {
-            object value = null;
-            SyntaxKind kind = SyntaxKind.Unknown;
-            string text = String.Empty;
-            long startPosition = _position;
-
+            SyntaxKind kind;
             do
             {
+                object value = null;
+                string text = String.Empty;
+                kind = SyntaxKind.Unknown;
+                long startPosition = _sourceStream.Position;
+
                 using (_readCharBag)
                 {
                     int readByte = _sourceStream.ReadByte();
@@ -112,6 +113,7 @@ namespace JsonSchemaRoslyn.Core
 
                         switch (_currentChar)
                         {
+                            case '\uffff':
                             case '\0':
                                 kind = SyntaxKind.EndOfFile;
                                 break;
@@ -121,11 +123,26 @@ namespace JsonSchemaRoslyn.Core
                             case '}':
                                 kind = SyntaxKind.CloseObjectCurlyBracket;
                                 break;
+                            case '[':
+                                kind = SyntaxKind.OpenArrayBracket;
+                                break;
+                            case ']':
+                                kind = SyntaxKind.CloseArrayBracket;
+                                break;
                             case '\'':
                             case '"':
                                 _readCharBag.EmptyBag();
-                                ExtractLiteral();
-                                kind = SyntaxKind.Literal;
+                                try
+                                {
+                                    ExtractLiteral();
+                                    kind = SyntaxKind.Literal;
+                                }
+                                catch (EndOfFileExtractLiteralException e)
+                                {
+                                    text = _readCharBag.ToString();
+                                    Diagnostics.AddDiagnostic(new Diagnostic(new TextSpan(startPosition, text?.Length ?? 0), $"The string is open but never closed. {text}", e));
+                                    continue;
+                                }
                                 break;
                             case '-':
                                 kind = SyntaxKind.Minus;
@@ -167,8 +184,33 @@ namespace JsonSchemaRoslyn.Core
                             default:
                                 if (char.IsLetter(_currentChar))
                                 {
-                                    ExtractLiteral();
-                                    kind = SyntaxKind.PropertyName;
+                                    using (ReadCharBag _tmpCharBag = new ReadCharBag())
+                                    {
+                                        try
+                                        {
+                                            ExtractKeyword(_tmpCharBag);
+                                        }
+                                        catch (EndOfFileExtractLiteralException e)
+                                        {
+                                            text = _readCharBag.ToString();
+                                            Diagnostics.AddDiagnostic(new Diagnostic(new TextSpan(startPosition, text?.Length ?? 0), $"the allowed keywords are boolean values, null and object", e));
+                                            continue;
+                                        }
+
+                                        string tmpValue = _tmpCharBag.ToString();
+
+                                        StringComparer currentCultureIgnoreCase = StringComparer.CurrentCultureIgnoreCase;
+                                        if (currentCultureIgnoreCase.Compare(tmpValue, "true") == 0 ||
+                                            currentCultureIgnoreCase.Compare(tmpValue, "false") == 0)
+                                        {
+                                            value = currentCultureIgnoreCase.Compare(tmpValue, "true") == 0;
+                                            kind = SyntaxKind.Boolean;
+                                        }
+                                        else if (currentCultureIgnoreCase.Compare(tmpValue, "null") == 0)
+                                        {
+                                            kind = SyntaxKind.Null;
+                                        }
+                                    }
                                 }
                                 else if (char.IsDigit(_currentChar))
                                 {
@@ -188,7 +230,7 @@ namespace JsonSchemaRoslyn.Core
                         if (kind == SyntaxKind.Unknown || kind == SyntaxKind.Count)
                         {
                             Diagnostics.AddDiagnostic(new Diagnostic(new TextSpan(startPosition, text?.Length ?? 0),
-                                $"Unknown character(s) {text}"));
+                                $"Unknown character(s) {text}", new UnknownCharacterException()));
                         }
                     }
                 }
@@ -197,23 +239,27 @@ namespace JsonSchemaRoslyn.Core
             } while (kind != SyntaxKind.EndOfFile);
         }
 
-        private void ExtractWhisteSpace()
+        private void ExtractWhisteSpace(ReadCharBag charBag = null)
         {
-            do
+            ReadCharBag currentBag = charBag ?? _readCharBag;
+            while (true)
             {
                 _currentChar = (char)_sourceStream.ReadByte();
-                if (char.IsWhiteSpace(_currentChar))
+                if (!char.IsWhiteSpace(_currentChar))
                 {
-                    _readCharBag.Add(_currentChar);
+                    if (_currentChar != '\uffff')
+                    {
+                        _sourceStream.Position--;
+                    }
+                    break;
                 }
-            } while (char.IsWhiteSpace(_currentChar));
-
-            _sourceStream.Position--;
+                currentBag.Add(_currentChar);
+            }
         }
 
         private void ExtractLiteral(ReadCharBag charBag = null)
         {
-            var currentBag = charBag ?? _readCharBag;
+            ReadCharBag currentBag = charBag ?? _readCharBag;
             char previousChar = default(char);
 
             while (true)
@@ -223,23 +269,48 @@ namespace JsonSchemaRoslyn.Core
                 {
                     break;
                 }
+                else if (_currentChar == '\uffff')
+                {
+                    throw new EndOfFileExtractLiteralException();
+                }
                 currentBag.Add(_currentChar);
                 previousChar = _currentChar;
             }
         }
 
-        private void ExtractDigit()
+        private void ExtractKeyword(ReadCharBag charBag = null)
         {
-            do
+            ReadCharBag currentBag = charBag ?? _readCharBag;
+
+            while (true)
             {
                 _currentChar = (char)_sourceStream.ReadByte();
-                if (char.IsDigit(_currentChar))
+                if (_currentChar == ':' || _currentChar == ','|| char.IsWhiteSpace(_currentChar))
                 {
-                    _readCharBag.Add(_currentChar);
+                    break;
                 }
-            } while (char.IsDigit(_currentChar));
-            _sourceStream.Position--;
+
+                if (_currentChar == '\uffff')
+                {
+                    throw new EndOfFileExtractLiteralException();
+                }
+                currentBag.Add(_currentChar);
+            }
         }
+
+        private void ExtractDigit(ReadCharBag charBag = null)
+            {
+                ReadCharBag currentBag = charBag ?? _readCharBag;
+                while (true)
+                {
+                    _currentChar = (char)_sourceStream.ReadByte();
+                    if (!char.IsDigit(_currentChar))
+                    {
+                        break;
+                    }
+                    currentBag.Add(_currentChar);
+                }
+            }
 
         /// <inheritdoc />
         public void Dispose()

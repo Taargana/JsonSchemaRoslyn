@@ -48,14 +48,18 @@ namespace JsonSchemaRoslyn.Core
             CreateSourceStream(sourceFile);
         }
 
-        public JsonLexer([NotNull] string path) : this()
+        public JsonLexer([NotNull] string content) : this()
         {
-            if (string.IsNullOrWhiteSpace(path))
+            if (string.IsNullOrWhiteSpace(content))
             {
-                throw new ArgumentException($"The path is null or white space", nameof(path));
+                throw new ArgumentException($"The content should not be empty or null", nameof(content));
             }
 
-            CreateSourceStream(new FileInfo(path));
+            _sourceStream = new MemoryStream();
+            var writer = new StreamWriter(_sourceStream);
+            writer.Write(content);
+            writer.Flush();
+            _sourceStream.Position = 0;
         }
 
         private JsonLexer()
@@ -117,18 +121,11 @@ namespace JsonSchemaRoslyn.Core
                             case '}':
                                 kind = SyntaxKind.CloseObjectCurlyBracket;
                                 break;
-                            case '"':
-                                yield return new SyntaxToken(SyntaxKind.DoubleQuote, "\"", startPosition);
-                                using (ReadCharBag literalCharBag = ReadCharBag.FromCharBag(_readCharBag))
-                                {
-                                    string literal = ExtractLiteral(literalCharBag);
-                                    yield return new SyntaxToken(SyntaxKind.Literal, literal, startPosition);
-                                }
-
-                                kind = SyntaxKind.DoubleQuote;
-                                break;
                             case '\'':
-                                kind = SyntaxKind.SimpleQuote;
+                            case '"':
+                                _readCharBag.EmptyBag();
+                                ExtractLiteral();
+                                kind = SyntaxKind.Literal;
                                 break;
                             case '-':
                                 kind = SyntaxKind.Minus;
@@ -210,26 +207,15 @@ namespace JsonSchemaRoslyn.Core
                     _readCharBag.Add(_currentChar);
                 }
             } while (char.IsWhiteSpace(_currentChar));
+
+            _sourceStream.Position--;
         }
 
-        private IEnumerable<char> ReadChars()
-        {
-            int byteValue;
-            while (true)
-            {
-                byteValue = _sourceStream.ReadByte();
-                yield return (char)byteValue;
-                if (byteValue == -1)
-                {
-                    break;
-                }
-            }
-        }
-
-        private string ExtractLiteral(ReadCharBag charBag = null)
+        private void ExtractLiteral(ReadCharBag charBag = null)
         {
             var currentBag = charBag ?? _readCharBag;
             char previousChar = default(char);
+
             while (true)
             {
                 _currentChar = (char)_sourceStream.ReadByte();
@@ -239,9 +225,7 @@ namespace JsonSchemaRoslyn.Core
                 }
                 currentBag.Add(_currentChar);
                 previousChar = _currentChar;
-            } 
-
-            return new String(currentBag);
+            }
         }
 
         private void ExtractDigit()
@@ -254,6 +238,7 @@ namespace JsonSchemaRoslyn.Core
                     _readCharBag.Add(_currentChar);
                 }
             } while (char.IsDigit(_currentChar));
+            _sourceStream.Position--;
         }
 
         /// <inheritdoc />

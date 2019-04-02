@@ -33,20 +33,32 @@ namespace JsonSchemaRoslyn.Core.Tests
             List<SyntaxToken> tokens = new List<SyntaxToken>();
             Stopwatch watch = new Stopwatch();
             watch.Start();
-            //using (JsonLexer jsonLexer = new JsonLexer(new FileInfo("./TestJsonFiles/JsonUtf8WithBom.json")))
             using (JsonLexer jsonLexer = new JsonLexer(new FileInfo(@"C:\Program Files (x86)\Audiokinetic\Wwise 2017.2.0.6500\Authoring\Data\Schemas\WwiseAuthoringAPI.json")))
             {
-                /*foreach (SyntaxToken syntaxToken in jsonLexer.Lex())
-                {
-                    tokens.Add(syntaxToken);
-
-                    if (syntaxToken.Kind != SyntaxKind.Whitespace)
-                    {
-                        Debug.WriteLine(syntaxToken.Text);
-                    }
-                }*/
 
                 tokens = jsonLexer.Lex().AsParallel().AsOrdered().ToList();
+
+                watch.Stop();
+                TimeSpan elapsed = watch.Elapsed;
+            }
+        }
+
+        [TestMethod]
+        public void Lex_Property_Colon_String()
+        {
+            List<SyntaxToken> tokens = new List<SyntaxToken>();
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+            using (JsonLexer jsonLexer = new JsonLexer("\"pattern\": \"^\\\\{[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}\\}$\""))
+            {
+
+                tokens = jsonLexer.Lex().AsParallel().AsOrdered().ToList();
+
+                Assert.AreEqual("pattern", tokens[0].Text);
+                Assert.AreEqual(":", tokens[1].Text);
+                Assert.AreEqual(" ", tokens[2].Text);
+                Assert.AreEqual("^\\\\{[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}\\}$", tokens[3].Text);
+                Assert.AreEqual(tokens[4].Kind, SyntaxKind.EndOfFile);
 
                 watch.Stop();
                 TimeSpan elapsed = watch.Elapsed;

@@ -42,10 +42,7 @@ namespace JsonSchemaRoslyn.Core
         /// <inheritdoc />
         public void Dispose()
         {
-            lock (_locker)
-            {
-                _readChars = new Char[0];
-            }
+            EmptyBag();
         }
 
         /// <inheritdoc />
@@ -92,6 +89,14 @@ namespace JsonSchemaRoslyn.Core
             }
             Debug.Assert(result != "\uffff");
             return result;
+        }
+
+        public void EmptyBag()
+        {
+            lock (_locker)
+            {
+                _readChars = new Char[0];
+            }
         }
     }
 }

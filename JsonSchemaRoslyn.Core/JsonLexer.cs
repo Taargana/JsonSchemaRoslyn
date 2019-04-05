@@ -50,7 +50,7 @@ namespace JsonSchemaRoslyn.Core
 
         public JsonLexer([NotNull] string content) : this()
         {
-            if (string.IsNullOrWhiteSpace(content))
+            if (content==null)
             {
                 throw new ArgumentException($"The content should not be empty or null", nameof(content));
             }

@@ -25,7 +25,7 @@ namespace JsonSchemaRoslyn.Core.Tests
         {
             Assert.ThrowsException<ArgumentException>(() =>
             {
-                new JsonLexer(String.Empty);
+                new JsonLexer((string)null);
             });
         }
 
@@ -86,6 +86,55 @@ namespace JsonSchemaRoslyn.Core.Tests
                 Assert.IsTrue(jsonLexer.Diagnostics.First().Exception is UnknownCharacterException);
                 Assert.IsTrue(jsonLexer.Diagnostics.Last().Exception is EndOfFileExtractLiteralException);
 
+            }
+        }
+
+        [TestMethod]
+        public void Lex_Property_Colon_String_Diagnostics_WhiteSpaceAndEndOfFile2()
+        {
+            string testCase =
+@"""propertyName"": {
+    ""type"": ""string"",
+    ""pattern"": ""^[a-zA-Z0-9 _]+$""
+},
+""objectPathArg"": {
+    ""type"": ""string"",
+    ""pattern"": ""^\\\""
+}";
+            using (JsonLexer jsonLexer = new JsonLexer(testCase))
+            {
+                List<SyntaxToken> tokens = jsonLexer.Lex().AsParallel().AsOrdered().ToList();
+                Assert.IsTrue(!jsonLexer.Diagnostics.Any());
+            }
+        }
+
+        [TestMethod]
+        public void Lex_Property_Colon_String_Diagnostics_WhiteSpaceAndEndOfFile()
+        {
+            string testCase = new String(new[] { ' ', ' ', ' ', ' ', ' ' });
+            using (JsonLexer jsonLexer = new JsonLexer(testCase))
+            {
+                List<SyntaxToken> tokens = jsonLexer.Lex().AsParallel().AsOrdered().ToList();
+                Assert.IsTrue(!jsonLexer.Diagnostics.Any());
+                Assert.AreEqual(tokens.Count, 2);
+                Assert.AreEqual(tokens[0].Kind, SyntaxKind.Whitespace);
+                Assert.AreEqual(tokens[0].Text.Length, 5);
+                Assert.AreEqual(tokens[1].Kind, SyntaxKind.EndOfFile);
+            }
+        }
+
+        [TestMethod]
+        [DataRow("\"Test\"     ")]
+        [DataRow("\"Test\"     \"A\"")]
+        public void Lex_Property_Colon_String_Diagnostics_LettersWhiteSpaceAndEndOfFile(string testCase)
+        {
+            using (JsonLexer jsonLexer = new JsonLexer(testCase))
+            {
+                List<SyntaxToken> tokens = jsonLexer.Lex().AsParallel().AsOrdered().ToList();
+                Assert.IsTrue(!jsonLexer.Diagnostics.Any());
+                Assert.AreEqual(tokens[0].Kind, SyntaxKind.Literal);
+                Assert.AreEqual(tokens[1].Kind, SyntaxKind.Whitespace);
+                Assert.AreEqual(tokens.Last().Kind, SyntaxKind.EndOfFile);
             }
         }
     }

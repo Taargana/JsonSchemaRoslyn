@@ -7,6 +7,7 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using JetBrains.Annotations;
+using JsonSchemaRoslyn.Core.Arrays;
 using JsonSchemaRoslyn.Core.Exceptions;
 using JsonSchemaRoslyn.Core.Extensions;
 
@@ -95,7 +96,7 @@ namespace JsonSchemaRoslyn.Core
             do
             {
                 object value = null;
-                string text = String.Empty;
+                string text = null;
                 kind = SyntaxKind.Unknown;
                 long startPosition = _sourceStream.Position;
 
@@ -150,29 +151,14 @@ namespace JsonSchemaRoslyn.Core
                             case ',':
                                 kind = SyntaxKind.Coma;
                                 break;
-                            case ';':
-                                kind = SyntaxKind.SemiColon;
-                                break;
-                            case '=':
-                                kind = SyntaxKind.Equal;
-                                break;
                             case '/':
                                 kind = SyntaxKind.Slash;
                                 break;
                             case '\\':
                                 kind = SyntaxKind.BackSlash;
                                 break;
-                            case '*':
-                                kind = SyntaxKind.Star;
-                                break;
                             case ':':
                                 kind = SyntaxKind.Colon;
-                                break;
-                            case '.':
-                                kind = SyntaxKind.Dot;
-                                break;
-                            case '+':
-                                kind = SyntaxKind.Plus;
                                 break;
                             case ' ':
                             case '\t':
@@ -184,11 +170,9 @@ namespace JsonSchemaRoslyn.Core
                             default:
                                 if (char.IsLetter(_currentChar))
                                 {
-                                    using (ReadCharBag _tmpCharBag = new ReadCharBag())
-                                    {
                                         try
                                         {
-                                            ExtractKeyword(_tmpCharBag);
+                                            ExtractKeyword();
                                         }
                                         catch (EndOfFileExtractLiteralException e)
                                         {
@@ -197,7 +181,7 @@ namespace JsonSchemaRoslyn.Core
                                             continue;
                                         }
 
-                                        string tmpValue = _tmpCharBag.ToString();
+                                        string tmpValue = _readCharBag.ToString();
 
                                         StringComparer currentCultureIgnoreCase = StringComparer.CurrentCultureIgnoreCase;
                                         if (currentCultureIgnoreCase.Compare(tmpValue, "true") == 0 ||
@@ -210,7 +194,6 @@ namespace JsonSchemaRoslyn.Core
                                         {
                                             kind = SyntaxKind.Null;
                                         }
-                                    }
                                 }
                                 else if (char.IsDigit(_currentChar))
                                 {
@@ -260,21 +243,31 @@ namespace JsonSchemaRoslyn.Core
         private void ExtractLiteral(ReadCharBag charBag = null)
         {
             ReadCharBag currentBag = charBag ?? _readCharBag;
-            char previousChar = default(char);
-
+            History<char> previousCharCircularArray = new History<char>(3);
             while (true)
             {
                 _currentChar = (char)_sourceStream.ReadByte();
-                if (_currentChar == '"' && previousChar != '\\')
+                if (_currentChar == '"')
                 {
-                    break;
+                    if (previousCharCircularArray.Current == '\\')
+                    {
+                        if (previousCharCircularArray.Preceding(1) == '\\')
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
+
                 }
                 else if (_currentChar == '\uffff')
                 {
                     throw new EndOfFileExtractLiteralException();
                 }
                 currentBag.Add(_currentChar);
-                previousChar = _currentChar;
+                previousCharCircularArray.Add(_currentChar);
             }
         }
 

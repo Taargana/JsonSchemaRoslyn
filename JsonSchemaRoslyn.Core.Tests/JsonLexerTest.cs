@@ -35,14 +35,14 @@ namespace JsonSchemaRoslyn.Core.Tests
             List<SyntaxToken> tokens = new List<SyntaxToken>();
             Stopwatch watch = new Stopwatch();
             watch.Start();
-            using (JsonLexer jsonLexer = new JsonLexer(new FileInfo(@"C:\Program Files (x86)\Audiokinetic\Wwise 2017.2.0.6500\Authoring\Data\Schemas\WwiseAuthoringAPI.json")))
+            using (JsonLexer jsonLexer = new JsonLexer(new FileInfo(@"C:\Program Files (x86)\Audiokinetic\Wwise 2018.1.6.6858\Authoring\Data\Schemas\WwiseAuthoringAPI.json")))
             {
 
                 tokens = jsonLexer.Lex().AsParallel().AsOrdered().ToList();
                 Assert.IsTrue(!jsonLexer.Diagnostics.Any());
                 watch.Stop();
                 TimeSpan elapsed = watch.Elapsed;
-                //var test = tokens.First(t => t.Kind == SyntaxKind.Null);
+                Assert.IsTrue(elapsed < TimeSpan.FromMilliseconds(250));
             }
         }
 
@@ -99,7 +99,7 @@ namespace JsonSchemaRoslyn.Core.Tests
 },
 ""objectPathArg"": {
     ""type"": ""string"",
-    ""pattern"": ""^\\\""
+    ""pattern"": ""^\\\\""
 }";
             using (JsonLexer jsonLexer = new JsonLexer(testCase))
             {

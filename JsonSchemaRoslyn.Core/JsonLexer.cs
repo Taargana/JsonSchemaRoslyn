@@ -311,4 +311,41 @@ namespace JsonSchemaRoslyn.Core
             _sourceStream.Dispose();
         }
     }
+
+    public class Number : IFormattable
+    {
+        private readonly List<Digit> _integerPart;
+        private readonly List<Digit> _decimalPart;
+
+        public Number(bool isNegatif)
+        {
+            IsNegatif = isNegatif;
+        }
+
+        public Boolean IsNegatif { get; }
+
+        public IEnumerable<Digit> IntegerPart => _integerPart.ToArray();
+
+        public IEnumerable<Digit> DecimalPart => _decimalPart.ToArray();
+
+        public void AddIntegerPart(Digit digit)
+        {
+            _integerPart.Add(digit);
+        }
+
+        public void AddDecimalPart(Digit digit)
+        {
+            _decimalPart.Add(digit);
+        }
+
+        public string ToString(string format, IFormatProvider formatProvider)
+        {
+            throw new NotImplementedException();
+        }
+
+        public string ToString(string format)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

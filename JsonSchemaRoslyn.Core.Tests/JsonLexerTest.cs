@@ -109,6 +109,37 @@ namespace JsonSchemaRoslyn.Core.Tests
         }
 
         [TestMethod]
+        public void Lex_Property_Colon_String_Diagnostics_DigitAndEndOfFile2()
+        {
+            string testCase =
+@"""Entier"": {
+    ""type"": ""int"",
+    ""value"": 123456
+},
+""EntierNegatif"": {
+    ""type"": ""int"",
+    ""value"": -123456
+},
+""Float"": {
+    ""type"": ""float"",
+    ""value"": 123.3
+},
+""Float2"": {
+    ""type"": ""float"",
+    ""value"": 123,3
+},
+""Float3"": {
+    ""type"": ""float"",
+    ""value"": 123.356.789
+}";
+            using (JsonLexer jsonLexer = new JsonLexer(testCase))
+            {int
+                List<SyntaxToken> tokens = jsonLexer.Lex().AsParallel().AsOrdered().ToList();
+                Assert.IsTrue(!jsonLexer.Diagnostics.Any());
+            }
+        }
+
+        [TestMethod]
         public void Lex_Property_Colon_String_Diagnostics_WhiteSpaceAndEndOfFile()
         {
             string testCase = new String(new[] { ' ', ' ', ' ', ' ', ' ' });
